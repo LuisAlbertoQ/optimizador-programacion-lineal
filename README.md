@@ -27,9 +27,10 @@ Una aplicación web interactiva para resolver problemas de programación lineal 
 
 ## 🔧 Instalacion (solo si quieres probar localmente)
 Primero Clonamos el repositorio con
-´´´
+```
 git clone https://github.com/LuisAlbertoQ/optimizador-programacion-lineal.git
-´´´
+```
+
 
 - pip inatall Streamlit
 - pip install SciPy
