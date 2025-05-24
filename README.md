@@ -26,9 +26,15 @@ Una aplicación web interactiva para resolver problemas de programación lineal 
 - Pandas
 
 ## 🔧 Instalacion (solo si quieres probar localmente)
-Primero Clonamos el repositorio con
+Primero: Clonamos el repositorio con
 ```
 git clone https://github.com/LuisAlbertoQ/optimizador-programacion-lineal.git
+```
+Segundo: Creamos un entorno virtual en la carpeta donde clonamos el repositorio
+```
+python -m venv <nombre del entorno virtual>
+ejemplo
+python -m venv env
 ```
 
 
