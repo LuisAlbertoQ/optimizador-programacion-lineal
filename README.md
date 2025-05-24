@@ -25,5 +25,13 @@ Una aplicación web interactiva para resolver problemas de programación lineal 
 - NumPy
 - Pandas
 
+## 🔧 Instalacion (solo si quieres probar localmente)
+
+- pip inatall Streamlit
+- pip install SciPy
+- pip install Matplotlib
+- pip install NumPy
+- pip install Pandas
+
 ---
 Desarrollado para facilitar el aprendizaje de programación lineal.
