@@ -42,15 +42,14 @@ Tercero: Activamos el entorno virtual e Instalamos las librerias requeridas:
 ejemplo👇
 env\Scripts\activate
 ```
-```
 librerias👇
+```
 pip inatall Streamlit
 pip install SciPy
 pip install Matplotlib
 pip install NumPy
 pip install Pandas
 ```
-Listo eso sera todo
-
+Listo eso seria todo 😁
 ---
 Desarrollado para facilitar el aprendizaje de programación lineal.
