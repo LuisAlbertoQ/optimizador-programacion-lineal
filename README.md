@@ -33,16 +33,24 @@ git clone https://github.com/LuisAlbertoQ/optimizador-programacion-lineal.git
 Segundo: Creamos un entorno virtual en la carpeta donde clonamos el repositorio
 ```
 python -m venv <nombre del entorno virtual>
-ejemplo
+ejemplo👇
 python -m venv env
 ```
-
-
-- pip inatall Streamlit
-- pip install SciPy
-- pip install Matplotlib
-- pip install NumPy
-- pip install Pandas
+Tercero: Activamos el entorno virtual e Instalamos las librerias requeridas:
+```
+<nombre del entorno virtual>\Scripts\activate
+ejemplo👇
+env\Scripts\activate
+```
+```
+librerias👇
+pip inatall Streamlit
+pip install SciPy
+pip install Matplotlib
+pip install NumPy
+pip install Pandas
+```
+Listo eso sera todo
 
 ---
 Desarrollado para facilitar el aprendizaje de programación lineal.
