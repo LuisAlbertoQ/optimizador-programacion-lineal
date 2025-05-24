@@ -1,333 +1,438 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
-
 from scipy.optimize import linprog
+import pandas as pd
 
-class RestriccionFrame(ttk.Frame):
-    def __init__(self, parent, numero, *args, **kwargs):
-        ttk.Frame.__init__(self, parent, *args, **kwargs)
-        self.numero = numero
-        
-        # Variables para la restricción
-        self.var_x = tk.DoubleVar(value=1.0)
-        self.var_y = tk.DoubleVar(value=1.0)
-        self.var_comparacion = tk.StringVar(value="<=")
-        self.var_valor = tk.DoubleVar(value=10.0)
-        
-        # Crear widgets
-        ttk.Label(self, text=f"Restricción {numero}:").grid(row=0, column=0, padx=5)
-        
-        ttk.Entry(self, textvariable=self.var_x, width=5).grid(row=0, column=1, padx=5)
-        ttk.Label(self, text="x  +").grid(row=0, column=2)
-        
-        ttk.Entry(self, textvariable=self.var_y, width=5).grid(row=0, column=3, padx=5)
-        ttk.Label(self, text="y").grid(row=0, column=4)
-        
-        comparacion_combo = ttk.Combobox(self, textvariable=self.var_comparacion, 
-                                        values=["<=", ">=", "="], width=3, state="readonly")
-        comparacion_combo.grid(row=0, column=5, padx=5)
-        
-        ttk.Entry(self, textvariable=self.var_valor, width=5).grid(row=0, column=6, padx=5)
-        
-        # Botón para eliminar la restricción
-        ttk.Button(self, text="X", width=2, command=self.eliminar_restriccion).grid(row=0, column=7, padx=5)
+# Configuración de la página
+st.set_page_config(
+    page_title="Optimizador de Programación Lineal - 2 Variables",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# CSS personalizado para mejorar la apariencia
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-container {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    .restriction-formula {
+        background-color: #e8f4f8;
+        padding: 0.5rem;
+        border-radius: 0.3rem;
+        font-family: monospace;
+        margin: 0.2rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Título principal
+st.markdown('<h1 class="main-header">📊 Optimizador de Programación Lineal</h1>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: center; color: #666; font-size: 1.2rem;">Resuelve problemas de optimización con 2 variables</p>', unsafe_allow_html=True)
+st.markdown("---")
+
+# Inicializar el estado de la sesión
+if 'restricciones' not in st.session_state:
+    st.session_state.restricciones = [
+        {'x': 1.0, 'y': 1.0, 'comparacion': '<=', 'valor': 10.0},
+        {'x': 2.0, 'y': 1.0, 'comparacion': '<=', 'valor': 15.0}
+    ]
+
+if 'resultado' not in st.session_state:
+    st.session_state.resultado = None
+
+# Sidebar para configuración
+with st.sidebar:
+    st.header("⚙️ Configuración")
     
-    def eliminar_restriccion(self):
-        self.master.eliminar_restriccion(self.numero)
+    # Función Objetivo
+    st.subheader("🎯 Función Objetivo")
+    objetivo_tipo = st.selectbox("Tipo de optimización", ["Maximizar", "Minimizar"], key="objetivo_tipo")
     
-    def obtener_datos(self):
-        return {
-            "x": self.var_x.get(),
-            "y": self.var_y.get(),
-            "comparacion": self.var_comparacion.get(),
-            "valor": self.var_valor.get()
+    col_coef1, col_coef2 = st.columns(2)
+    with col_coef1:
+        coef_x = st.number_input("Coeficiente de X", value=1.0, step=0.1, key="coef_x")
+    with col_coef2:
+        coef_y = st.number_input("Coeficiente de Y", value=1.0, step=0.1, key="coef_y")
+    
+    st.markdown(f'<div class="restriction-formula"><strong>{objetivo_tipo}:</strong> {coef_x}x + {coef_y}y</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Restricciones
+    st.subheader("📋 Restricciones")
+    
+    # Botones para manejar restricciones
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("➕ Agregar", key="add_restriction"):
+            st.session_state.restricciones.append({'x': 1.0, 'y': 1.0, 'comparacion': '<=', 'valor': 10.0})
+            st.rerun()
+    
+    with col_btn2:
+        if st.button("🗑️ Limpiar", key="clear_restrictions"):
+            st.session_state.restricciones = [
+                {'x': 1.0, 'y': 1.0, 'comparacion': '<=', 'valor': 10.0},
+                {'x': 2.0, 'y': 1.0, 'comparacion': '<=', 'valor': 15.0}
+            ]
+            st.session_state.resultado = None
+            st.rerun()
+    
+    # Mostrar restricciones actuales
+    restricciones_modificadas = []
+    for i, restriccion in enumerate(st.session_state.restricciones):
+        st.markdown(f"**Restricción {i+1}:**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            x_val = st.number_input("X", value=restriccion['x'], step=0.1, key=f"x_{i}")
+        with col2:
+            y_val = st.number_input("Y", value=restriccion['y'], step=0.1, key=f"y_{i}")
+        
+        col3, col4, col5 = st.columns([1, 1, 0.3])
+        with col3:
+            comp_val = st.selectbox("", ["<=", ">=", "="], 
+                                  index=["<=", ">=", "="].index(restriccion['comparacion']), 
+                                  key=f"comp_{i}")
+        with col4:
+            valor_val = st.number_input("Valor", value=restriccion['valor'], step=0.1, key=f"val_{i}")
+        with col5:
+            if st.button("❌", key=f"del_{i}"):
+                st.session_state.restricciones.pop(i)
+                st.rerun()
+        
+        # Actualizar la restricción
+        restriccion_actualizada = {
+            'x': x_val,
+            'y': y_val,
+            'comparacion': comp_val,
+            'valor': valor_val
         }
+        restricciones_modificadas.append(restriccion_actualizada)
+        
+        # Mostrar la fórmula
+        st.markdown(f'<div class="restriction-formula">{x_val}x + {y_val}y {comp_val} {valor_val}</div>', unsafe_allow_html=True)
+        st.markdown("---")
+    
+    # Actualizar las restricciones en el estado
+    st.session_state.restricciones = restricciones_modificadas
+    
+    # Botón resolver
+    st.markdown("### 🚀 Acción")
+    resolver = st.button("**RESOLVER PROBLEMA**", type="primary", use_container_width=True)
 
-class OptimizadorPL(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Optimizador de Programación Lineal - 2 Variables")
-        self.geometry("900x700")
-        
-        # Variables de configuración
-        self.restricciones_frames = {}
-        self.contador_restricciones = 0
-        
-        # Variables para la función objetivo
-        self.var_objetivo_x = tk.DoubleVar(value=1.0)
-        self.var_objetivo_y = tk.DoubleVar(value=1.0)
-        self.var_objetivo_tipo = tk.StringVar(value="Maximizar")
-        
-        # Crear frames principales
-        self.frame_entrada = ttk.Frame(self, padding="10")
-        self.frame_entrada.pack(fill="x", padx=10, pady=10)
-        
-        self.frame_restricciones = ttk.LabelFrame(self, text="Restricciones", padding="10")
-        self.frame_restricciones.pack(fill="x", padx=10, pady=5)
-        
-        self.frame_botones_restricciones = ttk.Frame(self.frame_restricciones, padding="5")
-        self.frame_botones_restricciones.pack(fill="x")
-        
-        self.frame_lista_restricciones = ttk.Frame(self.frame_restricciones, padding="5")
-        self.frame_lista_restricciones.pack(fill="x")
-        
-        self.frame_acciones = ttk.Frame(self, padding="10")
-        self.frame_acciones.pack(fill="x", padx=10, pady=5)
-        
-        self.frame_resultado = ttk.LabelFrame(self, text="Resultado", padding="10")
-        self.frame_resultado.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Configuración de función objetivo
-        ttk.Label(self.frame_entrada, text="Función objetivo:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        
-        ttk.Combobox(self.frame_entrada, textvariable=self.var_objetivo_tipo, 
-                     values=["Maximizar", "Minimizar"], width=10, state="readonly").grid(row=0, column=1, padx=5)
-        
-        ttk.Entry(self.frame_entrada, textvariable=self.var_objetivo_x, width=5).grid(row=0, column=2, padx=5)
-        ttk.Label(self.frame_entrada, text="x  +").grid(row=0, column=3)
-        
-        ttk.Entry(self.frame_entrada, textvariable=self.var_objetivo_y, width=5).grid(row=0, column=4, padx=5)
-        ttk.Label(self.frame_entrada, text="y").grid(row=0, column=5)
-        
-        # Botón para agregar restricciones
-        ttk.Button(self.frame_botones_restricciones, text="Agregar restricción", 
-                   command=self.agregar_restriccion).pack(side="left", padx=5)
-        
-        # Botones de acción
-        ttk.Button(self.frame_acciones, text="Resolver", command=self.resolver).pack(side="left", padx=5)
-        ttk.Button(self.frame_acciones, text="Limpiar", command=self.limpiar).pack(side="left", padx=5)
-        
-        # Área de resultado con texto y gráfico
-        self.frame_resultado_texto = ttk.Frame(self.frame_resultado)
-        self.frame_resultado_texto.pack(side="left", fill="y", padx=5, pady=5)
-        
-        self.resultado_texto = tk.Text(self.frame_resultado_texto, height=10, width=40)
-        self.resultado_texto.pack(fill="both", expand=True)
-        
-        self.frame_grafico = ttk.Frame(self.frame_resultado)
-        self.frame_grafico.pack(side="right", fill="both", expand=True, padx=5, pady=5)
-        
-        # Figura para el gráfico
-        self.fig = plt.Figure(figsize=(6, 5), dpi=100)
-        self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.frame_grafico)
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_grafico)
-        self.toolbar.update()
-        self.toolbar.pack(side="top", fill="x")
-        self.canvas.get_tk_widget().pack(fill="both", expand=True)
-        
-        # Agregar algunas restricciones iniciales
-        self.agregar_restriccion()
-        self.agregar_restriccion()
+# Área principal - Dividida en dos columnas
+col_main1, col_main2 = st.columns([1, 1])
+
+with col_main1:
+    st.header("📋 Resumen del Problema")
     
-    def agregar_restriccion(self):
-        self.contador_restricciones += 1
-        restriccion_frame = RestriccionFrame(self.frame_lista_restricciones, self.contador_restricciones)
-        restriccion_frame.pack(fill="x", pady=2)
-        self.restricciones_frames[self.contador_restricciones] = restriccion_frame
+    # Mostrar función objetivo
+    st.subheader("Función Objetivo:")
+    objetivo_texto = f"**{objetivo_tipo}:** {coef_x}x + {coef_y}y"
+    st.markdown(f'<div style="font-size: 1.2rem; padding: 1rem; background-color: #e8f4f8; border-radius: 0.5rem;">{objetivo_texto}</div>', unsafe_allow_html=True)
     
-    def eliminar_restriccion(self, numero):
-        if numero in self.restricciones_frames:
-            self.restricciones_frames[numero].destroy()
-            del self.restricciones_frames[numero]
+    # Mostrar restricciones
+    st.subheader("Restricciones:")
+    for i, restriccion in enumerate(st.session_state.restricciones):
+        restriccion_texto = f"{restriccion['x']}x + {restriccion['y']}y {restriccion['comparacion']} {restriccion['valor']}"
+        st.markdown(f"**{i+1}.** {restriccion_texto}")
     
-    def limpiar(self):
-        # Eliminar todas las restricciones
-        for num in list(self.restricciones_frames.keys()):
-            self.eliminar_restriccion(num)
-        
-        # Resetear variables
-        self.var_objetivo_x.set(1.0)
-        self.var_objetivo_y.set(1.0)
-        self.var_objetivo_tipo.set("Maximizar")
-        
-        # Limpiar resultado
-        self.resultado_texto.delete(1.0, tk.END)
-        self.ax.clear()
-        self.canvas.draw()
-        
-        # Agregar algunas restricciones iniciales
-        self.agregar_restriccion()
-        self.agregar_restriccion()
+    st.markdown("**Restricciones implícitas:** x ≥ 0, y ≥ 0")
     
-    def resolver(self):
-        try:
-            # Obtener datos de la función objetivo
-            c = [0, 0]
-            c[0] = -self.var_objetivo_x.get() if self.var_objetivo_tipo.get() == "Maximizar" else self.var_objetivo_x.get()
-            c[1] = -self.var_objetivo_y.get() if self.var_objetivo_tipo.get() == "Maximizar" else self.var_objetivo_y.get()
+    # Mostrar resultados si existen
+    if st.session_state.resultado and st.session_state.resultado.get('success'):
+        st.markdown("---")
+        st.header("✅ Resultados")
+        
+        resultado = st.session_state.resultado
+        
+        # Métricas principales
+        col_res1, col_res2, col_res3 = st.columns(3)
+        with col_res1:
+            st.metric("Valor de X", f"{resultado['x']:.4f}")
+        with col_res2:
+            st.metric("Valor de Y", f"{resultado['y']:.4f}")
+        with col_res3:
+            st.metric("Función Objetivo", f"{resultado['objetivo']:.4f}")
+        
+        # Tabla de evaluación de restricciones
+        st.subheader("📊 Evaluación de Restricciones")
+        eval_data = []
+        for i, restriccion in enumerate(st.session_state.restricciones):
+            valor_izq = restriccion['x'] * resultado['x'] + restriccion['y'] * resultado['y']
+            cumple = "✅" if (
+                (restriccion['comparacion'] == '<=' and valor_izq <= restriccion['valor'] + 1e-6) or
+                (restriccion['comparacion'] == '>=' and valor_izq >= restriccion['valor'] - 1e-6) or
+                (restriccion['comparacion'] == '=' and abs(valor_izq - restriccion['valor']) <= 1e-6)
+            ) else "❌"
             
-            # Obtener restricciones
-            A_le = []
-            b_le = []
-            A_ge = []
-            b_ge = []
-            A_eq = []
-            b_eq = []
-            
-            for frame in self.restricciones_frames.values():
-                datos = frame.obtener_datos()
-                a = [datos["x"], datos["y"]]
-                b = datos["valor"]
+            eval_data.append({
+                'Restricción': f"{restriccion['x']}x + {restriccion['y']}y {restriccion['comparacion']} {restriccion['valor']}",
+                'Valor Calculado': f"{valor_izq:.4f}",
+                'Valor Límite': f"{restriccion['valor']:.4f}",
+                'Cumple': cumple
+            })
+        
+        df_eval = pd.DataFrame(eval_data)
+        st.dataframe(df_eval, use_container_width=True, hide_index=True)
+    
+    elif st.session_state.resultado and not st.session_state.resultado.get('success'):
+        st.error("❌ No se encontró solución factible")
+        st.write(f"**Mensaje:** {st.session_state.resultado.get('message', 'Error desconocido')}")
+
+with col_main2:
+    st.header("📈 Visualización Gráfica")
+    
+    if resolver:
+        with st.spinner("Resolviendo problema de programación lineal..."):
+            try:
+                # Preparar los datos para linprog
+                c = [0, 0]
+                c[0] = -coef_x if objetivo_tipo == "Maximizar" else coef_x
+                c[1] = -coef_y if objetivo_tipo == "Maximizar" else coef_y
                 
-                if datos["comparacion"] == "<=":
-                    A_le.append(a)
-                    b_le.append(b)
-                elif datos["comparacion"] == ">=":
-                    A_ge.append(a)
-                    b_ge.append(b)
-                else:  # "="
-                    A_eq.append(a)
-                    b_eq.append(b)
-            
-            # Convertir a arrays de numpy
-            A_le = np.array(A_le) if A_le else None
-            b_le = np.array(b_le) if b_le else None
-            A_ge = np.array(A_ge) if A_ge else None
-            b_ge = np.array(b_ge) if b_ge else None
-            A_eq = np.array(A_eq) if A_eq else None
-            b_eq = np.array(b_eq) if b_eq else None
-            
-            # Convertir restricciones >= a formato <=
-            if A_ge is not None:
-                if A_le is None:
-                    A_le = -A_ge
-                    b_le = -b_ge
+                # Procesar restricciones
+                A_le = []
+                b_le = []
+                A_ge = []
+                b_ge = []
+                A_eq = []
+                b_eq = []
+                
+                for restriccion in st.session_state.restricciones:
+                    a = [restriccion['x'], restriccion['y']]
+                    b = restriccion['valor']
+                    
+                    if restriccion['comparacion'] == "<=":
+                        A_le.append(a)
+                        b_le.append(b)
+                    elif restriccion['comparacion'] == ">=":
+                        A_ge.append(a)
+                        b_ge.append(b)
+                    else:  # "="
+                        A_eq.append(a)
+                        b_eq.append(b)
+                
+                # Convertir a arrays
+                A_le = np.array(A_le) if A_le else None
+                b_le = np.array(b_le) if b_le else None
+                A_ge = np.array(A_ge) if A_ge else None
+                b_ge = np.array(b_ge) if b_ge else None
+                A_eq = np.array(A_eq) if A_eq else None
+                b_eq = np.array(b_eq) if b_eq else None
+                
+                # Convertir >= a <=
+                if A_ge is not None:
+                    if A_le is None:
+                        A_le = -A_ge
+                        b_le = -b_ge
+                    else:
+                        A_le = np.vstack([A_le, -A_ge])
+                        b_le = np.append(b_le, -b_ge)
+                
+                # Restricciones de no negatividad
+                bounds = [(0, None), (0, None)]
+                
+                # Resolver
+                result = linprog(
+                    c=c,
+                    A_ub=A_le,
+                    b_ub=b_le,
+                    A_eq=A_eq,
+                    b_eq=b_eq,
+                    bounds=bounds,
+                    method='highs'
+                )
+                
+                if result.success:
+                    # Calcular valor objetivo real
+                    valor_objetivo = result.x[0] * coef_x + result.x[1] * coef_y
+                    
+                    # Guardar resultado en session_state
+                    st.session_state.resultado = {
+                        'success': True,
+                        'x': result.x[0],
+                        'y': result.x[1],
+                        'objetivo': valor_objetivo,
+                        'result_obj': result
+                    }
+                    
+                    st.success("✅ ¡Solución encontrada!")
                 else:
-                    A_le = np.vstack([A_le, -A_ge])
-                    b_le = np.append(b_le, -b_ge)
-            
-            # Añadir restricciones de no negatividad (x, y >= 0)
-            bounds = [(0, None), (0, None)]
-            
-            # Resolver el problema de programación lineal
-            result = linprog(
-                c=c,
-                A_ub=A_le,
-                b_ub=b_le,
-                A_eq=A_eq,
-                b_eq=b_eq,
-                bounds=bounds,
-                method='highs'
-            )
-            
-            # Mostrar resultados
-            self.resultado_texto.delete(1.0, tk.END)
-            if result.success:
-                # Calcular el valor real de la función objetivo (para maximización)
-                valor_objetivo = result.x[0] * self.var_objetivo_x.get() + result.x[1] * self.var_objetivo_y.get()
-                if self.var_objetivo_tipo.get() == "Maximizar":
-                    valor_objetivo = -result.fun
-                else:
-                    valor_objetivo = result.fun
-                
-                self.resultado_texto.insert(tk.END, "Solución encontrada:\n\n")
-                self.resultado_texto.insert(tk.END, f"x = {result.x[0]:.4f}\n")
-                self.resultado_texto.insert(tk.END, f"y = {result.x[1]:.4f}\n\n")
-                self.resultado_texto.insert(tk.END, f"Valor de la función objetivo: {valor_objetivo:.4f}\n")
-                
-                # Mostrar gráfico
-                self.graficar_solucion(result.x, A_le, b_le, A_eq, b_eq)
-            else:
-                self.resultado_texto.insert(tk.END, "No se encontró solución:\n\n")
-                self.resultado_texto.insert(tk.END, result.message)
-        
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al resolver: {str(e)}")
+                    st.session_state.resultado = {
+                        'success': False,
+                        'message': result.message
+                    }
+                    
+            except Exception as e:
+                st.error(f"❌ Error al resolver: {str(e)}")
+                st.session_state.resultado = {'success': False, 'message': str(e)}
     
-    def graficar_solucion(self, optimo, A_le, b_le, A_eq, b_eq):
-        self.ax.clear()
+    # Mostrar gráfico si hay resultado exitoso
+    if st.session_state.resultado and st.session_state.resultado.get('success'):
+        resultado = st.session_state.resultado
+        
+        # Crear el gráfico
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         # Límites del gráfico
-        x_max = max(20, optimo[0] * 1.5)
-        y_max = max(20, optimo[1] * 1.5)
+        x_max = max(20, resultado['x'] * 1.5) if resultado['x'] > 0 else 20
+        y_max = max(20, resultado['y'] * 1.5) if resultado['y'] > 0 else 20
         
-        # Crear la cuadrícula de puntos
+        # Crear la cuadrícula
         x = np.linspace(0, x_max, 1000)
         y = np.linspace(0, y_max, 1000)
         X, Y = np.meshgrid(x, y)
         
-        # Graficar la región factible
-        region_factible = np.ones_like(X, dtype=bool)
+        # Región factible inicial (todo el primer cuadrante)
+        region_factible = (X >= 0) & (Y >= 0)
         
-        # Aplicar restricciones <=
-        if A_le is not None:
-            for i in range(len(A_le)):
-                a, b = A_le[i]
-                region_factible &= (a * X + b * Y <= b_le[i])
+        # Aplicar restricciones
+        for restriccion in st.session_state.restricciones:
+            a, b = restriccion['x'], restriccion['y']
+            valor = restriccion['valor']
+            
+            if restriccion['comparacion'] == "<=":
+                region_factible &= (a * X + b * Y <= valor)
+            elif restriccion['comparacion'] == ">=":
+                region_factible &= (a * X + b * Y >= valor)
+            else:  # "="
+                region_factible &= np.isclose(a * X + b * Y, valor, atol=1e-2)
         
-        # Aplicar restricciones =
-        if A_eq is not None:
-            for i in range(len(A_eq)):
-                a, b = A_eq[i]
-                region_factible &= np.isclose(a * X + b * Y, b_eq[i], atol=1e-2)
-        
-        # Colorear la región factible
-        self.ax.imshow(
+        # Colorear región factible
+        ax.imshow(
             region_factible,
             extent=(0, x_max, 0, y_max),
             origin='lower',
             cmap='Blues',
-            alpha=0.3
+            alpha=0.3,
+            aspect='auto'
         )
         
-        # Graficar las líneas de restricción
+        # Graficar líneas de restricción
         x_vals = np.linspace(0, x_max, 100)
+        colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
         
-        # Líneas para restricciones <=
-        if A_le is not None:
-            for i in range(len(A_le)):
-                a, b = A_le[i]
-                if b == 0:
-                    continue  # Evitar división por cero
-                
-                if a == 0:
-                    # Línea horizontal
-                    self.ax.axhline(y=b_le[i]/b, color='gray', linestyle='-', alpha=0.7)
-                else:
-                    # Línea normal
-                    y_vals = (b_le[i] - a * x_vals) / b if b != 0 else np.zeros_like(x_vals)
-                    self.ax.plot(x_vals, y_vals, 'gray', alpha=0.7)
+        for i, restriccion in enumerate(st.session_state.restricciones):
+            a, b = restriccion['x'], restriccion['y']
+            valor = restriccion['valor']
+            color = colors[i % len(colors)]
+            
+            if b != 0:
+                y_vals = (valor - a * x_vals) / b
+                valid_mask = (y_vals >= 0) & (y_vals <= y_max)
+                ax.plot(x_vals[valid_mask], y_vals[valid_mask], 
+                       color=color, linewidth=2, alpha=0.8,
+                       label=f"R{i+1}: {a}x + {b}y {restriccion['comparacion']} {valor}")
+            elif a != 0:
+                x_line = valor / a
+                if 0 <= x_line <= x_max:
+                    ax.axvline(x=x_line, color=color, linewidth=2, alpha=0.8,
+                             label=f"R{i+1}: {a}x + {b}y {restriccion['comparacion']} {valor}")
         
-        # Líneas para restricciones =
-        if A_eq is not None:
-            for i in range(len(A_eq)):
-                a, b = A_eq[i]
-                if b == 0:
-                    continue  # Evitar división por cero
-                
-                if a == 0:
-                    # Línea horizontal
-                    self.ax.axhline(y=b_eq[i]/b, color='blue', linestyle='-', alpha=0.7)
-                else:
-                    # Línea normal
-                    y_vals = (b_eq[i] - a * x_vals) / b if b != 0 else np.zeros_like(x_vals)
-                    self.ax.plot(x_vals, y_vals, 'blue', alpha=0.7)
+        # Punto óptimo
+        ax.plot(resultado['x'], resultado['y'], 'ro', markersize=12, 
+               markeredgecolor='darkred', markeredgewidth=2, label='Punto Óptimo')
+        ax.annotate(f'Óptimo\n({resultado["x"]:.2f}, {resultado["y"]:.2f})', 
+                   xy=(resultado['x'], resultado['y']), 
+                   xytext=(resultado['x']+x_max*0.05, resultado['y']+y_max*0.05),
+                   arrowprops=dict(facecolor='red', shrink=0.05, width=2, headwidth=8),
+                   fontsize=10, fontweight='bold',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
         
-        # Graficar el punto óptimo
-        self.ax.plot(optimo[0], optimo[1], 'ro', markersize=10)
-        self.ax.annotate(f'Óptimo ({optimo[0]:.2f}, {optimo[1]:.2f})', 
-                         xy=(optimo[0], optimo[1]), 
-                         xytext=(optimo[0]+0.5, optimo[1]+0.5),
-                         arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=7))
+        # Configurar gráfico
+        ax.set_xlim(0, x_max)
+        ax.set_ylim(0, y_max)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('X', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Y', fontsize=12, fontweight='bold')
+        ax.set_title('Solución Gráfica del Problema de Programación Lineal', 
+                    fontsize=14, fontweight='bold')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         
-        # Ajustar límites del gráfico
-        self.ax.set_xlim(0, x_max)
-        self.ax.set_ylim(0, y_max)
+        # Mostrar gráfico
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+    else:
+        # Mostrar gráfico de ejemplo o instrucciones
+        st.info("👆 Configura tu problema en el panel lateral y presiona 'RESOLVER PROBLEMA' para ver la solución gráfica.")
         
-        # Añadir cuadrícula y etiquetas
-        self.ax.grid(True, alpha=0.3)
-        self.ax.set_xlabel('x')
-        self.ax.set_ylabel('y')
-        self.ax.set_title('Solución Gráfica')
+        # Gráfico de ejemplo
+        fig, ax = plt.subplots(figsize=(8, 6))
+        x = np.linspace(0, 10, 100)
+        y1 = 10 - x
+        y2 = (15 - 2*x)
         
-        # Dibujar
-        self.canvas.draw()
+        ax.fill_between(x, 0, np.minimum(y1, y2), where=(np.minimum(y1, y2) >= 0), 
+                       alpha=0.3, color='blue', label='Región Factible')
+        ax.plot(x, y1, 'r-', label='x + y ≤ 10')
+        ax.plot(x, y2, 'g-', label='2x + y ≤ 15')
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 10)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_title('Ejemplo de Problema de Programación Lineal')
+        ax.legend()
+        
+        st.pyplot(fig)
 
-if __name__ == "__main__":
-    app = OptimizadorPL()
-    app.mainloop()
+# Información adicional
+st.markdown("---")
+with st.expander("ℹ️ Cómo usar esta aplicación"):
+    st.markdown("""
+    ### 📋 Instrucciones de uso:
+    
+    1. **Configura la función objetivo**:
+       - Elige si quieres maximizar o minimizar
+       - Ingresa los coeficientes para X e Y
+    
+    2. **Define las restricciones**:
+       - Usa el panel lateral para agregar/modificar restricciones
+       - Cada restricción tiene la forma: ax + by ≤/≥/= c
+       - Puedes agregar tantas restricciones como necesites
+    
+    3. **Resuelve el problema**:
+       - Presiona el botón "RESOLVER PROBLEMA"
+       - Observa la solución en el gráfico y los resultados numéricos
+    
+    4. **Interpreta los resultados**:
+       - El punto rojo en el gráfico es la solución óptima
+       - La región azul muestra todas las soluciones factibles
+       - Las líneas de colores representan las restricciones
+    
+    ### 🔧 Características:
+    - ✅ Resolución automática usando el método Simplex
+    - ✅ Visualización gráfica interactiva
+    - ✅ Evaluación automática de restricciones
+    - ✅ Soporte para maximización y minimización
+    - ✅ Restricciones de igualdad, desigualdad menor y mayor
+    
+    ### ⚠️ Notas importantes:
+    - Las variables X e Y son automáticamente no negativas (X ≥ 0, Y ≥ 0)
+    - Si no existe solución factible, se mostrará un mensaje de error
+    - El gráfico se ajusta automáticamente según la solución encontrada
+    """)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; font-size: 0.9rem;">
+    💡 <strong>Optimizador de Programación Lineal</strong> | 
+    Desarrollado con Streamlit | 
+    🔬 Método Simplex implementado con SciPy
+</div>
+""", unsafe_allow_html=True)
