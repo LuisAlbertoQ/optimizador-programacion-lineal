@@ -25,5 +25,31 @@ Una aplicación web interactiva para resolver problemas de programación lineal 
 - NumPy
 - Pandas
 
+## 🔧 Instalacion (solo si quieres probar localmente)
+Primero: Clonamos el repositorio con
+```
+git clone https://github.com/LuisAlbertoQ/optimizador-programacion-lineal.git
+```
+Segundo: Creamos un entorno virtual en la carpeta donde clonamos el repositorio
+```
+python -m venv <nombre del entorno virtual>
+ejemplo👇
+python -m venv env
+```
+Tercero: Activamos el entorno virtual e Instalamos las librerias requeridas:
+```
+<nombre del entorno virtual>\Scripts\activate
+ejemplo👇
+env\Scripts\activate
+```
+librerias👇
+```
+pip inatall Streamlit
+pip install SciPy
+pip install Matplotlib
+pip install NumPy
+pip install Pandas
+```
+Listo eso seria todo 😁
 ---
 Desarrollado para facilitar el aprendizaje de programación lineal.
