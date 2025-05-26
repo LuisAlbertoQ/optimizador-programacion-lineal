@@ -50,6 +50,10 @@ pip install Matplotlib
 pip install NumPy
 pip install Pandas
 ```
+Utiliza este comando para iniciar el programa
+```
+streamlit run app.py
+```
 Listo eso seria todo 😁
 ---
 Desarrollado para facilitar el aprendizaje de programación lineal.
